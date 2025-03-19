@@ -10,4 +10,8 @@ Usage: python run.py
 """
 import os
 
-os.system("python -m src.train")
+epochs = 10
+steps_per_epoch = 100
+learning_rate = 0.001
+
+os.system(f"python -m src.train -epochs {epochs} -steps {steps_per_epoch} -lr {learning_rate}")

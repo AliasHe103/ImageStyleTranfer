@@ -1,3 +1,4 @@
+import argparse
 import os
 
 import torch
@@ -7,11 +8,15 @@ from tqdm import tqdm
 
 from src.model import ImageStyleTransfer
 
-epochs = 10
-steps_per_epoch = 100
-learning_rate = 0.001
+parser = argparse.ArgumentParser()
+parser.add_argument("-epochs", type=int, default=10)
+parser.add_argument("-steps", type=int, default=100)
+parser.add_argument("-lr", type=float, default=0.001)
+args = parser.parse_args()
+epochs, steps_per_epoch, learning_rate = args.epochs, args.steps, args.lr
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+w1, w2 = 1.0, 1000.0
 
 loader = transforms.Compose([
     transforms.Resize(512),
@@ -59,7 +64,6 @@ def compute_style_loss(features):
         style_loss += torch.nn.functional.mse_loss(gram, target_gram)
     return style_loss
 
-w1, w2 = 1.0, 100.0
 def train_step():
     optimizer.zero_grad()
     gen_content_feats, gen_style_feats = model(result_image)
