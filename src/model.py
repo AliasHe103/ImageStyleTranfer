@@ -1,47 +1,46 @@
-from collections import OrderedDict
-
+import torch
 from torch import nn
 from torchvision import models
 
-content_layers = {'block4_conv2': 0.5, 'block5_conv2': 0.5}
-style_layers = {'block1_conv1': 0.2, 'block2_conv1': 0.2, 'block3_conv1': 0.2, 'block4_conv1': 0.2, 'block5_conv1': 0.2}
-def get_vgg19_model(layers):
-    model = models.vgg19(weights=models.VGG19_Weights.IMAGENET1K_V1).features
-    model_with_convolution_layers = nn.Sequential(*list(model.children())[:36])
-
-    for param in model_with_convolution_layers.parameters():
-        param.requires_grad = False
-
-    outputs = OrderedDict()
-    for name, layer in zip(layers, model_with_convolution_layers.children()):
-        outputs[name] = layer
-        print(f"{name}: {layer}")
-    return model, outputs
+style_layers = {0: "block1_conv1", 5: "block2_conv1",
+                10: "block3_conv1", 19: "block4_conv1", 28: "block5_conv1"}
+content_layers = {21: "block4_conv2", 30: "block5_conv2"}
 
 class ImageStyleTransfer(nn.Module):
-    def __init__(self, cl=None, sl=None):
+    def __init__(self):
         super(ImageStyleTransfer, self).__init__()
-        if sl is None:
-            sl = style_layers
-        if cl is None:
-            cl = content_layers
-        self.content_layers = cl
-        self.style_layers = sl
+        self.content_layers = content_layers
+        self.style_layers = style_layers
+        # pretrained model
+        vgg = models.vgg19(weights=models.VGG19_Weights.IMAGENET1K_V1)
+        self.features = vgg.features
+        self.features.eval()
 
-        layers = list(self.content_layers.keys()) + list(self.style_layers.keys())
-        self.vgg19, self.outputs = get_vgg19_model(layers)
+        for param in self.features.parameters():
+            param.requires_grad = False
+        self.content_layers = content_layers
+        self.style_layers = style_layers
+
+        self.register_buffer('mean', torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
+        self.register_buffer('std', torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
 
     def forward(self, x):
-        content_outputs = []
-        style_outputs = []
+        # normalize
+        x = (x - self.mean) / self.std
 
-        for name, layer in self.outputs.items():
-            x = layer(x)
-            if name in self.content_layers:
-                content_outputs.append((x, self.content_layers[name]))
-            if name in self.style_layers:
-                style_outputs.append((x, self.style_layers[name]))
-        return {'content': content_outputs, 'style': style_outputs}
+        content_features = {}
+        style_features = {}
+
+        for layer_id, layer in enumerate(self.features):
+            x = layer(x) # necessary
+            if layer_id in self.content_layers:
+                content_features[self.content_layers[layer_id]] = x
+            if layer_id in self.style_layers:
+                style_features[self.style_layers[layer_id]] = x
+            if layer_id >= max(self.content_layers.keys() | self.style_layers.keys()):
+                break
+
+        return content_features, style_features
 
 if __name__ == '__main__':
     ist_model = ImageStyleTransfer()
